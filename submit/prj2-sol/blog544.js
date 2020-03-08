@@ -44,8 +44,13 @@ MISSING_FIELD:
 
 export default class Blog544 {
 
-  constructor(meta, options) {
+  constructor(client_con,db,meta, options) {
     //@TODO
+	this.client_con = client_con;
+	this.db = client_con.db(db);
+	this.users = this.db.collection('users');
+	this.articles = this.db.collection('articles');
+	this.comments = this.db.collection('comments');
     this.meta = meta;
     this.options = options;
     this.validator = new Validator(meta);
@@ -54,18 +59,33 @@ export default class Blog544 {
   /** options.dbUrl contains URL for mongo database */
   static async make(meta, options) {
     //@TOD
-    return new Blog544(meta, options);
+	const splits = options.dbUrl.split('://');
+	const index = options.dbUrl.lastIndexOf('/');
+	if(index<0 || splits.length !== 2 || splits[0]!== 'mongodb')
+	{
+		const msg = `BAD MONGODB URL '${options.dbUrl}'`;
+		throw [new BlogError('BAD_MONGO_URL',msg)];
+	}
+	
+	const db = options.dbUrl.slice(index+1);
+	const client_con = await mongo.connect(options.dbUrl,MONGO_CONNECT_OPTIONS);
+	
+    return new Blog544(client_con,db,meta, options);
   }
 
   /** Release all resources held by this blog.  Specifically, close
    *  any database connections.
    */
   async close() {
+	this.client_con.close();
     //@TODO
   }
 
   /** Remove all data for this blog */
   async clear() {
+	await this.users.deleteMany({});
+	await this.articles.deleteMany({});
+	await this.comments.deleteMany({});
     //@TODO
   }
 
@@ -74,6 +94,27 @@ export default class Blog544 {
    */
   async create(category, createSpecs) {
     const obj = this.validator.validate(category, 'create', createSpecs);
+	var x;
+	if(category==="users")
+	{
+		obj['_id'] = obj['id'];
+		await this.users.insertOne(obj);
+	}
+	else if(category==="articles")
+	{
+		x = Math.random();
+		obj['_id'] = x.toString();
+		obj['id'] = x.toString();
+		await this.articles.insertOne(obj);
+	}
+	else if(category==="comments")
+	{
+		x = Math.random();
+		obj['_id'] = x.toString();
+		obj['id'] = x.toString();
+		await this.comments.insertOne(obj);
+	}
+	return(obj['_id']);
     //@TODO
   }
 
@@ -95,12 +136,172 @@ export default class Blog544 {
   async find(category, findSpecs={}) {
     const obj = this.validator.validate(category, 'find', findSpecs);
     //@TODO
-    return [];
+	var flag_count=false,flag_index=false,flag_other=false;
+	var temp_i,temp_spec;
+	var limit=5,_index=0;
+    	var flag=true;
+	var counter=0;
+	var temp=[],temp2=[];
+	var i,y,j;
+	for(i in findSpecs){counter++;}
+	if(counter<1)
+	{
+		if(category === "users"){
+			const result = await this.users.find().sort({creationTime:-1}).limit(5).toArray();
+			for(i=0;i<5;i++){await delete (result[i])['_id'];}
+			return result;
+		}
+	
+		
+		else if(category === "articles"){
+			const result = await this.articles.find().sort({creationTime:-1}).limit(5).toArray();
+			for(i=0;i<5;i++){await delete (result[i])['_id'];}
+			return result;
+		}
+		
+		else if(category === "comments"){
+			const result = await this.comments.find().sort({creationTime:-1}).limit(5).toArray();
+			for(i=0;i<5;i++){await delete (result[i])['_id'];}
+			return result;
+		}
+	}
+	
+	else if(counter>=1)
+	{
+		counter=0;
+		if(category === 'users')
+		{
+			for(var t in findSpecs)
+			{
+				if(t === '_count'){limit = Number(findSpecs[t]); flag_count=true;}
+				else if(t === '_index'){_index = Number(findSpecs[t]);flag_index=true;}
+				else{temp_i = t;temp_spec=findSpecs[t];flag_other=true;}
+			}
+
+			if(flag_other)
+			{
+				if(temp_i==='creationTime')
+				{
+					const result2 = await this.users.find().sort({creationTime:-1}).skip(_index).toArray();
+					for(j=0;j<result2.length;j++)
+					{
+						if(Date.parse(temp_spec) > (Date.parse(((result2[j])['creationTime']))).toString()){await temp.push(result2[j]);}
+					}
+				}
+				else{
+						var query = {[temp_i]: temp_spec}
+						temp = await this.users.find(query).sort({creationTime:-1}).skip(_index).limit(limit).toArray();
+				}
+			}
+			else{
+				temp = await this.users.find().sort({creationTime:-1}).skip(_index).limit(limit).toArray();
+			}
+			
+			if(limit>temp.length){limit=temp.length}
+			for(y=0;y<limit;y++){
+				
+				delete (temp[y])['_id'];
+				await temp2.push(temp[y]);
+			}
+				return temp2;
+		}
+
+		if(category === 'articles')
+		{
+			for(var t in findSpecs)
+			{
+				if(t === '_count'){limit = Number(findSpecs[t]); flag_count=true;}
+				else if(t === '_index'){_index = Number(findSpecs[t]);flag_index=true;}
+				else{temp_i = t;temp_spec=findSpecs[t];flag_other=true;}
+			}
+
+			if(flag_other)
+			{
+				if(temp_i==='creationTime')
+				{
+					const result2 = await this.articles.find().sort({creationTime:-1}).skip(_index).toArray();
+					for(j=0;j<result2.length;j++)
+					{
+						if(Date.parse(temp_spec) > (Date.parse(((result2[j])['creationTime']))).toString()){await temp.push(result2[j]);}
+					}
+				}
+				else{
+						var query = {[temp_i]: temp_spec}
+						temp = await this.articles.find(query).sort({creationTime:-1}).skip(_index).limit(limit).toArray();
+				}
+			}
+			else{
+				temp = await this.articles.find().sort({creationTime:-1}).skip(_index).limit(limit).toArray();
+			}
+			
+			if(limit>temp.length){limit=temp.length}
+			for(y=0;y<limit;y++){
+				
+				delete (temp[y])['_id'];
+				await temp2.push(temp[y]);
+			}
+				return temp2;
+		}
+
+		if(category === 'comments')
+		{
+			for(var t in findSpecs)
+			{
+				if(t === '_count'){limit = Number(findSpecs[t]); flag_count=true;}
+				else if(t === '_index'){_index = Number(findSpecs[t]);flag_index=true;}
+				else{temp_i = t;temp_spec=findSpecs[t];flag_other=true;}
+			}
+
+			if(flag_other)
+			{
+				if(temp_i==='creationTime')
+				{
+					const result2 = await this.comments.find().sort({creationTime:-1}).skip(_index).toArray();
+					for(j=0;j<result2.length;j++)
+					{
+						if(Date.parse(temp_spec) > (Date.parse(((result2[j])['creationTime']))).toString()){await temp.push(result2[j]);}
+					}
+				}
+				else{
+						var query = {[temp_i]: temp_spec}
+						temp = await this.comments.find(query).sort({creationTime:-1}).skip(_index).limit(limit).toArray();
+				}
+			}
+			else{
+				temp = await this.comments.find().sort({creationTime:-1}).skip(_index).limit(limit).toArray();
+			}
+			
+			if(limit>temp.length){limit=temp.length}
+			for(y=0;y<limit;y++){
+				
+				delete (temp[y])['_id'];
+				await temp2.push(temp[y]);
+			}
+				return temp2;
+		}
+		
+	}
+
   }
 
   /** Remove up to one blog object from category with id == rmSpecs.id. */
   async remove(category, rmSpecs) {
     const obj = this.validator.validate(category, 'remove', rmSpecs);
+	var query = {"_id":rmSpecs['id']};
+	if(category === 'users')
+	{
+			await this.users.deleteOne(query);
+	}
+	
+	else if(category === 'articles')
+	{
+			await this.articles.deleteOne(query);
+	}
+
+	else if(category === 'comments')
+	{
+			await this.comments.deleteOne(query);
+	}
     //@TODO
   }
 
@@ -109,8 +310,41 @@ export default class Blog544 {
    */
   async update(category, updateSpecs) {
     const obj = this.validator.validate(category, 'update', updateSpecs);
-    //@TODO
+	var j,flag=true;
+	var query = {"_id":updateSpecs.id};
+	var newvalues;
+	if(category==='users')
+	{
+		for(j in updateSpecs)
+		{
+			if(flag===true){flag=false;continue;}
+			newvalues = { $set: {[j]: updateSpecs[j]} };
+			await this.users.updateOne(query,newvalues);
+		}
+	}
+	
+	else if(category==='articles')
+	{
+		for(j in updateSpecs)
+		{
+			if(flag===true){flag=false;continue;}
+			newvalues = { $set: {[j]: updateSpecs[j]} };
+			await this.articles.updateOne(query,newvalues);
+		}
+	}
+
+	else if(category==='comments')
+	{
+		for(j in updateSpecs)
+		{
+			if(flag===true){flag=false;continue;}
+			newvalues = { $set: {[j]: updateSpecs[j]} };
+			await this.comments.updateOne(query,newvalues);
+		}
+	}
   }
+    //@TODO
+  
   
 }
 
